@@ -419,7 +419,12 @@ Potential enhancements for extending this project beyond its current academic sc
 
 ---
 
+## Disclaimer
 
+SecureChat is an academic/software engineering project intended to demonstrate TLS socket programming concepts. It has not undergone a formal security audit and should not be relied upon for transmitting sensitive or confidential information in production environments without significant additional hardening — particularly around peer/certificate authentication.
 
 ---
 
+## License
+
+No explicit license is currently defined for this project. If you intend to make the repository open source, add an appropriate `LICENSE` file and reference it here.
