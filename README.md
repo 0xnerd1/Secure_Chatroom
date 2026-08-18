@@ -1,368 +1,430 @@
-SecureChat — TLS-Encrypted Peer-to-Peer Chat Application
-A lightweight, dependency-free Python chat application that establishes an encrypted, socket-based communication channel between two peers using TLS/SSL.
+# SecureChat — SSL-Encrypted Peer-to-Peer Chat over TCP Sockets
 
-The application is designed as a minimal, self-contained demonstration of secure socket programming, combining Python's built-in `socket` and `ssl` modules with self-signed certificate generation via OpenSSL, multithreaded full-duplex messaging, and a simple server/client command-line interface.
+A lightweight, terminal-based, end-to-end encrypted chat application built with Python's native `socket` and `ssl` modules. SecureChat establishes a TLS-wrapped TCP connection between exactly two peers — a **server** and a **client** — and allows them to exchange real-time text messages over an encrypted channel, using a locally generated self-signed certificate.
 
-Project status: Development / Educational Project
-Version: 1.0
-Language: Python 3
-Transport Security: TLS (via Python `ssl` module)
-Networking Model: Single-connection TCP socket (server/client)
+The application is designed as an academic/security-learning project demonstrating TLS socket programming, certificate generation via OpenSSL, and full-duplex threaded messaging.
 
-Table of Contents
-Overview
-Key Features
-Technology Stack
-Application Architecture
-Project Structure
-Requirements
-Installation
-SSL Certificate Generation
-Running the Application
-Command-Line Usage Reference
-Communication Workflow
-Threading Model
-Session Termination
-Troubleshooting
-Configuration Notes
-Security Notes
-Recommended .gitignore
-Future Improvements
-Disclaimer
-License
+**Project status:** Academic / Demonstration Project
+**Version:** 1.0
+**Language:** Python 3
+**Transport Security:** TLS (via Python `ssl` module, OpenSSL-backed)
+**Networking Model:** Single TCP socket, full-duplex, multi-threaded
 
-Overview
-SecureChat is a single-file Python application (`secure_chat.py`) that allows two parties to exchange real-time text messages over an encrypted TCP connection. It operates in one of two modes — server or client — and wraps a standard TCP socket in a TLS layer using Python's `ssl` module, so that traffic between the two peers is encrypted in transit.
+---
 
-The application supports:
+## Table of Contents
 
-Self-signed SSL/TLS certificate generation via OpenSSL
-A TLS-wrapped TCP server that listens for a single incoming connection
-A TLS TCP client that connects to a remote server
-Simultaneous bidirectional messaging using independent send/receive threads
-Graceful session termination via an `exit` command
-Command-line argument parsing for server and client modes
-Because it relies only on Python's standard library (`socket`, `ssl`, `threading`, `argparse`, `subprocess`) plus a local OpenSSL installation, the project has no external Python package dependencies.
+- [Overview](#overview)
+- [Key Features](#key-features)
+- [Technology Stack](#technology-stack)
+- [Application Architecture](#application-architecture)
+- [Project Structure](#project-structure)
+- [Requirements](#requirements)
+- [Installation](#installation)
+- [Generating SSL Certificates](#generating-ssl-certificates)
+- [Running the Application](#running-the-application)
+- [Command-Line Reference](#command-line-reference)
+- [Connection & Messaging Workflow](#connection--messaging-workflow)
+- [Message Exchange Protocol](#message-exchange-protocol)
+- [Exiting a Chat Session](#exiting-a-chat-session)
+- [Troubleshooting](#troubleshooting)
+- [Security Notes](#security-notes)
+- [Recommended .gitignore](#recommended-gitignore)
+- [Limitations](#limitations)
+- [Future Improvements](#future-improvements)
+- [Disclaimer](#disclaimer)
+- [License](#license)
 
-Key Features
-TLS-Encrypted Transport
-All messages are transmitted over a socket wrapped with Python's `ssl` module rather than a raw TCP socket. This encrypts the communication channel between the server and client, protecting message contents from passive network eavesdropping.
+---
 
-The server loads a certificate/key pair and presents it during the TLS handshake. The client wraps its socket using a client-purpose SSL context to negotiate the encrypted session.
+## Overview
 
-Self-Signed Certificate Generation
-The application can generate its own SSL certificate and private key using OpenSSL, invoked as a subprocess:
+SecureChat is a minimal, dependency-free chat tool that demonstrates how to secure a raw TCP socket connection using TLS. One instance of the script runs in **server mode** and listens for an incoming connection; a second instance runs in **client mode** and connects to the server's IP address and port. Once the TLS handshake completes, both peers can send and receive messages simultaneously using separate sender and receiver threads.
 
-A 2048-bit RSA key pair is generated
-A self-signed X.509 certificate valid for 365 days is created
-The certificate uses the subject `/CN=SecureChat`
-Output files are `cert.pem` and `key.pem`
-If both files already exist, generation is skipped automatically.
+The project supports:
 
-Full-Duplex Messaging
-Once a TLS session is established, the application spawns two daemon threads per peer:
+- One-time generation of a self-signed TLS certificate and private key
+- TLS-wrapped TCP server and client modes
+- Full-duplex, multi-threaded messaging (send and receive concurrently)
+- Graceful session termination via an `exit` command
+- Basic connection-loss and error handling on both ends
 
-A send thread that reads input from the local terminal and transmits it
-A receive thread that listens for incoming data and prints it to the terminal
-This allows both sides of the conversation to send and receive messages concurrently, without blocking on each other.
+The application is a single Python script and requires no external Python packages — only a working OpenSSL installation on the host system for certificate generation.
 
-Server / Client Modes
-The application operates as either:
+---
 
-Server — binds to a local port and waits for exactly one incoming connection
-Client — connects to a specified server IP address and port
-Mode selection and connection parameters are supplied via command-line arguments.
+## Key Features
 
-Graceful Exit Handling
-Typing `exit` in either the server or client terminal:
+### TLS-Encrypted Transport
+All traffic between the server and client is wrapped in a TLS session using Python's `ssl` module, backed by a locally generated `cert.pem` / `key.pem` pair. Messages are not sent in plaintext over the wire.
 
-Notifies the remote peer that the session is ending
-Closes the local socket cleanly
-Terminates the process
-The receiving side detects the `exit` signal (or a closed connection) and shuts down its own session in response.
+### Self-Signed Certificate Generation
+The script can generate its own SSL certificate and private key using an OpenSSL command invoked via `subprocess`, avoiding the need for a manually created certificate before first use.
 
-Connection Failure Handling
-The application catches common socket-level failures during send and receive operations, including `BrokenPipeError` and `ConnectionResetError`, and exits cleanly with a status message rather than raising an unhandled exception.
+### Full-Duplex Messaging
+Sending and receiving run on independent daemon threads (`secure_send` and `secure_receive`), so either peer can type and send a message at any time without waiting for the other side to finish receiving.
 
-Technology Stack
-Component | Technology
---- | ---
-Programming Language | Python 3
-Networking | `socket` (standard library, TCP/IPv4)
-Transport Encryption | `ssl` (standard library, TLS)
-Certificate Generation | OpenSSL (via `subprocess`)
-Concurrency | `threading` (daemon threads for send/receive)
-CLI Parsing | `argparse`
-Process Interop | `subprocess` (for invoking the `openssl` CLI)
-Interface | Terminal / command-line, stdin-driven
+### Server / Client Modes
+A single script serves both roles:
 
-Application Architecture
-The application follows a simple two-role, single-connection client/server model, with TLS wrapping applied at the socket layer before any application data is exchanged.
+- **Server mode** binds to `0.0.0.0` on a specified port and waits for a single incoming connection.
+- **Client mode** connects out to a specified server IP and port.
 
-                ┌─────────────────────────┐
-                │   OpenSSL (subprocess)   │
-                │  generates cert.pem /    │
-                │        key.pem           │
-                └────────────┬─────────────┘
-                              │
-                              ▼
-        ┌──────────────────────────────────────┐
-        │              SERVER MODE              │
-        │  TCP socket bound to 0.0.0.0:<port>   │
-        │  ssl.SSLContext (CLIENT_AUTH purpose) │
-        │  loads cert.pem + key.pem             │
-        │  accept() → wrap_socket(server_side)  │
-        └────────────────┬───────────────────────┘
-                          │  TLS Handshake
-                          ▼
-        ┌──────────────────────────────────────┐
-        │              CLIENT MODE              │
-        │  TCP socket → connect(ip, port)       │
-        │  ssl.SSLContext (SERVER_AUTH purpose) │
-        │  wrap_socket(server_hostname=ip)      │
-        └────────────────┬───────────────────────┘
-                          │
-                          ▼
-              ┌───────────────────────────┐
-              │   Encrypted TLS Channel    │
-              └─────────────┬─────────────┘
-                             │
-              ┌──────────────┴──────────────┐
-              ▼                              ▼
-     ┌──────────────────┐          ┌──────────────────┐
-     │  secure_send()    │          │ secure_receive()  │
-     │  (daemon thread)  │          │  (daemon thread)   │
-     │  stdin → socket    │          │  socket → stdout   │
-     └──────────────────┘          └──────────────────┘
-Both the server and client instantiate their own pair of send/receive threads once the TLS handshake completes, giving each side an independent, concurrent read/write loop over the same encrypted socket.
+### Graceful Exit Handling
+Typing `exit` on either side sends an exit signal to the remote peer, closes the local socket, and terminates the process cleanly on both ends.
 
-Project Structure
+### Basic Resilience
+Both the send and receive loops catch `BrokenPipeError`, `ConnectionResetError`, and generic exceptions, printing a clear status message and exiting rather than crashing with an unhandled traceback.
+
+---
+
+## Technology Stack
+
+| Component | Technology |
+|---|---|
+| Programming Language | Python 3 |
+| Transport | TCP (`socket` module) |
+| Encryption | TLS (`ssl` module) |
+| Certificate Generation | OpenSSL (invoked via `subprocess`) |
+| Concurrency Model | `threading` (daemon threads) |
+| CLI Parsing | `argparse` |
+| Dependencies | Python standard library only (+ OpenSSL binary on host) |
+
+---
+
+## Application Architecture
+
+```
+                     ┌───────────────────────┐
+                     │      Peer A (You)      │
+                     │   Terminal / Console    │
+                     └───────────┬─────────────┘
+                                 │
+                     secure_send │ secure_receive
+                        (thread) │ (thread)
+                                 │
+                     ┌───────────▼─────────────┐
+                     │   ssl.SSLSocket (TLS)   │
+                     │  wraps TCP socket conn  │
+                     └───────────┬─────────────┘
+                                 │
+                         Encrypted TCP Channel
+                                 │
+                     ┌───────────▼─────────────┐
+                     │   ssl.SSLSocket (TLS)   │
+                     │  wraps TCP socket conn  │
+                     └───────────┬─────────────┘
+                                 │
+                     secure_send │ secure_receive
+                        (thread) │ (thread)
+                                 │
+                     ┌───────────▼─────────────┐
+                     │      Peer B (Remote)    │
+                     │   Terminal / Console    │
+                     └───────────────────────────┘
+```
+
+The **server** creates an `ssl.SSLContext` with `ssl.Purpose.CLIENT_AUTH`, loads the certificate chain via `load_cert_chain()`, binds a standard TCP socket, and wraps the accepted connection using `context.wrap_socket(conn, server_side=True)`.
+
+The **client** creates an `ssl.SSLContext` with `ssl.Purpose.SERVER_AUTH`, connects a standard TCP socket to the server, and wraps it using `context.wrap_socket(client_sock, server_hostname=ip)`.
+
+Once wrapped, both sides spin up two daemon threads:
+
+- `secure_send` — reads input from the terminal (`input()`) and sends it over the encrypted socket.
+- `secure_receive` — blocks on `conn.recv()` and prints incoming messages as they arrive.
+
+---
+
+## Project Structure
+
+```
 SecureChat-Project/
 │
-├── secure_chat.py        # Main application — server, client, and CLI entry point
+├── secure_chat.py        # Entire application: server, client, keygen, CLI
 ├── cert.pem              # Self-signed TLS certificate (generated, not committed)
-├── key.pem               # Private key for the certificate (generated, not committed)
-└── README.md             # Project documentation
-As a single-file application, all functionality — key generation, server logic, client logic, and threaded messaging — is implemented within `secure_chat.py`.
+├── key.pem               # TLS private key (generated, not committed)
+└── README.md
+```
 
-Function | Responsibility
---- | ---
-`generate_ssl_keys()` | Generates `cert.pem` / `key.pem` via OpenSSL if they don't already exist
-`secure_send(conn)` | Reads terminal input and sends it over the encrypted connection
-`secure_receive(conn)` | Listens for incoming data and prints it to the terminal
-`start_server(port)` | Binds, listens, accepts one connection, and wraps it in TLS as the server
-`start_client(ip, port)` | Connects to a remote server and wraps the connection in TLS as the client
-`main (argparse block)` | Parses CLI arguments and dispatches to server or client mode
+The project is intentionally implemented as a single script for simplicity, with clearly separated functions for key generation, sending, receiving, server startup, and client startup.
 
-Requirements
-Before running SecureChat, install:
+| Function | Responsibility |
+|---|---|
+| `generate_ssl_keys()` | Generates `cert.pem` and `key.pem` via OpenSSL if they don't already exist |
+| `secure_send(conn)` | Reads terminal input and transmits it over the TLS socket; handles the `exit` command |
+| `secure_receive(conn)` | Listens for incoming data and prints it; detects remote `exit` / disconnects |
+| `start_server(port)` | Builds the server-side TLS context, binds/listens, accepts one connection, starts I/O threads |
+| `start_client(ip, port)` | Builds the client-side TLS context, connects to the server, starts I/O threads |
+| `__main__` block | Parses CLI arguments and dispatches to key generation, server mode, or client mode |
 
-Python 3.7 or newer (for the `ssl` and `socket` standard library features used)
-OpenSSL command-line tool, available on the system `PATH`
+---
+
+## Requirements
+
+- Python 3.7 or newer (standard library only — no `pip install` required)
+- OpenSSL installed and available on the system `PATH` (required only for `--generate-keys`)
+- Two machines (or two terminals on the same machine) that can reach each other over TCP on the chosen port
+
 Check Python:
-
+```bash
 python3 --version
+```
+
 Check OpenSSL:
-
+```bash
 openssl version
-No third-party Python packages are required — the project relies entirely on the standard library.
+```
 
-Installation
-1. Clone or download the project
+---
+
+## Installation
+
+### 1. Clone the repository
+```bash
 git clone https://github.com/<your-username>/SecureChat-Project.git
-Move into the project directory:
-
 cd SecureChat-Project
-2. (Optional) Create a virtual environment
-Although no external packages are required, a virtual environment can still be used for isolation:
+```
 
-python3 -m venv venv
-source venv/bin/activate      # Linux / macOS
-venv\Scripts\activate         # Windows
-3. Verify OpenSSL is available
+No virtual environment or `requirements.txt` is needed — the script relies only on Python's standard library (`socket`, `ssl`, `threading`, `sys`, `os`, `argparse`, `subprocess`).
+
+---
+
+## Generating SSL Certificates
+
+Before the first server run, generate a self-signed certificate and private key:
+
+```bash
+python3 secure_chat.py --generate-keys
+```
+
+This runs the following OpenSSL command internally:
+
+```bash
+openssl req -x509 -newkey rsa:2048 -keyout key.pem -out cert.pem -days 365 -nodes -subj "/CN=SecureChat"
+```
+
+This produces two files in the project directory:
+
+| File | Purpose |
+|---|---|
+| `cert.pem` | Self-signed public certificate presented by the server during the TLS handshake |
+| `key.pem` | Private key used by the server to establish the TLS session |
+
+If both files already exist, the script skips generation and prints a confirmation message instead of overwriting them.
+
+> Only the **server** needs `cert.pem` and `key.pem` present in its working directory. The client does not require its own certificate/key pair for this configuration.
+
+---
+
+## Running the Application
+
+### Start the server
+On the machine that will listen for the connection:
+```bash
+python3 secure_chat.py server <port>
+```
+Example:
+```bash
+python3 secure_chat.py server 5555
+```
+
+### Start the client
+On the machine that will connect to the server:
+```bash
+python3 secure_chat.py client <server_ip> <port>
+```
+Example:
+```bash
+python3 secure_chat.py client 192.168.1.10 5555
+```
+
+Once the client connects and the TLS handshake succeeds, both terminals display a connection confirmation, and either side can begin typing messages.
+
+---
+
+## Command-Line Reference
+
+| Argument | Applies To | Description |
+|---|---|---|
+| `mode` | required | `server` or `client` |
+| `ip_port` | required | Server mode: `<port>` only. Client mode: `<server_ip> <port>` |
+| `--generate-keys` | optional flag | Generates `cert.pem` / `key.pem` and exits immediately, without starting a connection |
+
+Usage errors (wrong number of positional arguments) print a short usage hint and exit with a non-zero status code.
+
+---
+
+## Connection & Messaging Workflow
+
+```
+Server                                   Client
+  │                                         │
+  │ python secure_chat.py server <port>    │
+  │ bind + listen on 0.0.0.0:<port>        │
+  │                                         │
+  │                     python secure_chat.py client <ip> <port>
+  │◄────────────── TCP connect ────────────┤
+  │                                         │
+  │──────────── TLS handshake ────────────►│
+  │◄─────────── TLS handshake ─────────────│
+  │                                         │
+  │  wrap_socket(server_side=True)   wrap_socket(server_hostname=ip)
+  │                                         │
+  │  start secure_send / secure_receive threads (both sides)
+  │                                         │
+  │◄══════════ encrypted messages ════════►│
+```
+
+1. The server binds to `0.0.0.0:<port>` and calls `listen(1)`, accepting exactly one connection at a time.
+2. The client connects to the given server IP and port over a plain TCP socket.
+3. Both sides wrap their socket in a TLS context — the server presents its certificate, and the client (with `verify_mode = ssl.CERT_NONE`) accepts it without validating a certificate authority chain.
+4. Once the encrypted socket is established, each side launches its `secure_send` and `secure_receive` threads as daemon threads.
+5. Messages typed into either terminal are sent immediately and printed on the remote terminal, prefixed with `[📩] Message:`.
+
+---
+
+## Message Exchange Protocol
+
+SecureChat does not implement a structured message protocol (no JSON, headers, or framing) — it sends and receives **raw UTF-8-encoded text** directly over the TLS socket, read in a single `recv(4096)` call per message.
+
+| Direction | Behavior |
+|---|---|
+| Outgoing | `input()` → `.encode()` → `conn.sendall()` |
+| Incoming | `conn.recv(4096)` → `.decode()` → printed to terminal |
+| Exit signal | The literal string `"exit"` is sent and interpreted by the receiving side as a disconnect request |
+
+Because there is no length-prefixing or delimiter framing, messages are assumed to fit within a single `recv(4096)` call; very large messages may be split across multiple receive calls and are not currently reassembled.
+
+---
+
+## Exiting a Chat Session
+
+Either peer can end the session by typing:
+
+```
+exit
+```
+
+What happens:
+
+1. The local `secure_send` thread detects the `exit` keyword.
+2. It sends the literal bytes `b"exit"` to the remote peer.
+3. It closes the local socket and calls `sys.exit(0)`.
+4. On the remote side, `secure_receive` detects the incoming `"exit"` string, prints a disconnect notice, closes its socket, and exits as well.
+
+An unexpected network drop (rather than a typed `exit`) is instead caught as a `BrokenPipeError` or `ConnectionResetError` and reported as a connection loss.
+
+---
+
+## Troubleshooting
+
+### `FileNotFoundError` / OpenSSL errors during `--generate-keys`
+Confirm OpenSSL is installed and reachable:
+```bash
 openssl version
-If this command is not recognized, install OpenSSL for your platform before continuing.
+```
+If it's missing, install it via your system's package manager (e.g. `apt install openssl`, `brew install openssl`).
 
-SSL Certificate Generation
-Before starting the server for the first time, generate a certificate and private key:
+### `ssl.SSLError: [SSL] PEM lib` or certificate load failure
+This usually means `cert.pem` or `key.pem` is missing, empty, or corrupted in the server's working directory. Regenerate them:
+```bash
+rm -f cert.pem key.pem
+python3 secure_chat.py --generate-keys
+```
 
-python secure_chat.py server 5555 --generate-keys
-Or generate keys independently of starting a session:
+### `OSError: [Errno 98] Address already in use`
+The chosen port is already bound by another process. Either stop that process or start the server on a different port:
+```bash
+python3 secure_chat.py server 6001
+```
 
-python secure_chat.py --generate-keys server 5555
-This creates:
+### Client connects but the handshake fails
+Ensure the server was started with valid certificate files present in its working directory, and that the client is pointed at the correct IP and port. Firewalls or NAT between the two machines can also block the TCP handshake before TLS is ever attempted.
 
-cert.pem   — self-signed X.509 certificate (365-day validity, CN=SecureChat)
-key.pem    — 2048-bit RSA private key
-If `cert.pem` and `key.pem` already exist in the working directory, the application detects them and skips regeneration, printing a confirmation message instead.
+### Nothing happens after `client` connects
+Confirm both peers are actually on the same reachable network segment (or that appropriate port forwarding is configured), and that no firewall rule is silently dropping traffic on the chosen port.
 
-Only the server needs `cert.pem` and `key.pem` present in its working directory. The client does not require its own certificate, since the client's SSL context is configured for server verification rather than presenting a certificate of its own.
+---
 
-Running the Application
-Starting the Server
-python secure_chat.py server <port>
-Example:
+## Security Notes
 
-python secure_chat.py server 5555
-The server will:
+This project is intended primarily for **academic and educational purposes** — demonstrating TLS socket programming — and should **not** be treated as a production-grade secure messaging tool in its current form.
 
-Bind to `0.0.0.0` on the specified port
-Wait for exactly one incoming connection
-Perform a TLS handshake once a client connects
-Start the send/receive threads
-Starting the Client
-python secure_chat.py client <server_ip> <port>
-Example:
+Before considering any real-world use, review and address the following:
 
-python secure_chat.py client 127.0.0.1 5555
-The client will:
+- **Certificate verification is disabled on the client.** `verify_mode = ssl.CERT_NONE` and `check_hostname = False` mean the client accepts *any* certificate presented by the server, without validating it against a trusted CA or expected hostname. This makes the connection vulnerable to man-in-the-middle attacks unless certificate pinning or proper CA-based verification is added.
+- **No authentication of peers.** There is no username/password, pre-shared key, or identity verification — anyone who can reach the listening port and complete a TLS handshake can chat.
+- **No message integrity framing beyond TLS.** TLS itself provides confidentiality and integrity for the transport, but the application layer has no additional signing, replay protection, or structured message validation.
+- **Single-connection server.** The server accepts exactly one connection and then stops listening; it is not designed for multiple concurrent clients.
+- **Private key handling.** `key.pem` is generated with `-nodes` (no passphrase). Treat it as a sensitive file — do not commit it to version control or share it.
+- **No rate limiting or input sanitization.** Messages are printed to the terminal as-is; no filtering is performed on received content.
+- **Self-signed certificates only.** There is no support for CA-issued certificates or certificate rotation in the current implementation.
 
-Connect to the given IP address and port
-Perform a TLS handshake with the server
-Start the send/receive threads
-Once connected, either side can type messages directly into the terminal and press Enter to send them.
+---
 
-Command-Line Usage Reference
-Command | Description
---- | ---
-`python secure_chat.py --generate-keys` | Generates `cert.pem` / `key.pem` and exits
-`python secure_chat.py server <port>` | Starts the application in server mode on the given port
-`python secure_chat.py client <ip> <port>` | Starts the application in client mode, connecting to `<ip>:<port>`
-Argument | Applies To | Description
---- | --- | ---
-`mode` | Required | Either `server` or `client`
-`ip_port` | Required | For server: `<port>`. For client: `<server_ip> <port>`
-`--generate-keys` | Optional flag | Generates SSL keys and exits without starting a session
+## Recommended `.gitignore`
 
-Communication Workflow
-A typical session between two peers proceeds as follows:
-
-Peer A (Server)                         Peer B (Client)
-      │                                        │
-      ▼                                        │
-generate_ssl_keys()                            │
-(cert.pem / key.pem)                           │
-      │                                        │
-      ▼                                        │
-start_server(port)                             │
-  bind → listen → accept()                     │
-      │                                        ▼
-      │                              start_client(ip, port)
-      │                                connect(ip, port)
-      │                                        │
-      └──────────── TLS Handshake ─────────────┘
-                          │
-                          ▼
-        secure_send()  ⇄  secure_receive()   (both peers)
-                          │
-                          ▼
-              Messages exchanged in real time
-                          │
-                          ▼
-             One side types "exit" → session ends
-                for both peers
-
-Threading Model
-Each peer (server and client) runs two daemon threads once the TLS connection is established:
-
-send_thread → runs secure_send(conn)    — blocks on terminal input, writes to socket
-recv_thread → runs secure_receive(conn) — blocks on socket recv(), writes to terminal
-Both threads are marked as daemon threads, so they terminate automatically if the main process exits. The main thread joins on both threads and stays alive for the duration of the chat session.
-
-Session Termination
-A session can end in one of the following ways:
-
-Typing exit — The local side sends an `"exit"` payload to the remote peer, closes its socket, and calls `sys.exit(0)`.
-Remote peer sends exit or disconnects — `secure_receive()` detects an empty payload or the literal string `"exit"` and closes the connection on its own side.
-Connection-level failure — A `BrokenPipeError` or `ConnectionResetError` during send/receive is caught, a status message is printed, and the process exits.
-Because the server only calls `accept()` once, a closed session requires restarting the server process to accept a new connection.
-
-Troubleshooting
-`openssl: command not found`
-OpenSSL is not installed or not on your system `PATH`. Install it via your OS package manager (e.g., `apt install openssl`, `brew install openssl`) and re-run `python secure_chat.py --generate-keys`.
-
-`FileNotFoundError` / SSL context fails to load certificate
-The server could not find `cert.pem` and `key.pem` in the current working directory. Run:
-
-python secure_chat.py --generate-keys
-Then start the server again from the same directory.
-
-`Address already in use`
-The chosen port is already bound by another process. Either stop the other process or choose a different port:
-
-python secure_chat.py server 6000
-Client Cannot Connect
-Confirm the server is running and listening on the expected port.
-Confirm the IP address is reachable (use the server's LAN IP rather than `127.0.0.1` if connecting from a different machine).
-Confirm no firewall is blocking the chosen port.
-Connection Drops Unexpectedly
-This typically surfaces as a `BrokenPipeError` or `ConnectionResetError`, both of which are caught and reported. This generally indicates the remote peer closed the connection or the network path was interrupted.
-
-Configuration Notes
-Setting | Location | Default
---- | --- | ---
-Certificate file | `CERT_FILE` constant | `cert.pem`
-Private key file | `KEY_FILE` constant | `key.pem`
-Server bind address | `start_server()` | `0.0.0.0` (all interfaces)
-Listen backlog | `start_server()` | `1` (single connection only)
-Receive buffer size | `secure_receive()` | `4096` bytes
-Certificate validity | `generate_ssl_keys()` | `365` days
-Certificate key size | `generate_ssl_keys()` | RSA 2048-bit
-These values are currently hardcoded and would need to be edited directly in `secure_chat.py` to change.
-
-Security Notes
-This project is intended primarily for educational and development purposes, as a demonstration of TLS socket programming in Python. Before relying on it for any sensitive communication, be aware of the following:
-
-Client does not verify the server certificate. The client sets `check_hostname = False` and `verify_mode = ssl.CERT_NONE`, which disables certificate validation entirely. This makes the connection vulnerable to man-in-the-middle attacks, since the client will accept any certificate presented by the server, self-signed or otherwise.
-Self-signed certificates provide encryption, not authentication. Without a trusted certificate authority or a pinned/known certificate fingerprint, a self-signed certificate proves the traffic is encrypted but not that you are talking to the intended peer.
-No message authentication or integrity signing beyond TLS. The application relies entirely on the TLS layer for confidentiality and integrity; there is no additional application-level message signing.
-No authentication or access control. Any client that can reach the server's IP and port can attempt to connect; there is no username/password or key-based peer authentication.
-Single connection only. The server's listen backlog is set to accept only one connection at a time, and only one connection is ever accepted, so it is not resilient to multiple or repeated connection attempts.
-Private key handling. `key.pem` is generated with no passphrase (`-nodes`), meaning the private key is stored unencrypted on disk. Protect the file with appropriate filesystem permissions.
-Before using this project beyond local testing or a lab environment:
-
-Enable proper certificate verification on the client (`check_hostname = True`, `verify_mode = ssl.CERT_REQUIRED`) with a trusted CA or a pinned certificate.
-Consider adding authentication (e.g., pre-shared keys, mutual TLS with client certificates).
-Avoid transmitting sensitive data over untrusted networks without additional review.
-Restrict file permissions on `key.pem`.
-Recommended .gitignore
-Before pushing this project to a public repository, exclude generated key material:
-
-# Generated TLS certificate and private key
-cert.pem
-key.pem
-
+```gitignore
 # Python
 __pycache__/
 *.pyc
 
-# Virtual environment
-venv/
-.venv/
+# TLS material — never commit private keys or generated certs
+cert.pem
+key.pem
 
 # OS files
 .DS_Store
 Thumbs.db
-If `key.pem` has ever been committed to version control, removing it from future commits alone is not sufficient — treat the key as compromised, regenerate a new certificate/key pair, and scrub the file from repository history if the repository is or was public.
 
-Future Improvements
-Potential future development areas include:
+# IDE
+.vscode/
+.idea/
+```
 
-Client-side certificate verification (removing `CERT_NONE`)
-Mutual TLS (client certificate authentication)
-Support for multiple simultaneous client connections
-Message framing/length-prefixing instead of raw `recv()` buffering
-Encrypted message logging or session transcripts
-A configuration file for host, port, and certificate paths
-Graphical or web-based front end
-Passphrase-protected private keys
-Reconnection handling on dropped connections
-Unit and integration tests for the networking layer
+If `key.pem` or `cert.pem` have already been committed to Git history, remove them from tracking and rotate the key pair:
+```bash
+git rm --cached cert.pem key.pem
+git add .gitignore
+git commit -m "Remove TLS material from repository"
+```
 
-Disclaimer
-SecureChat is an educational/demonstration project illustrating TLS socket programming concepts in Python. It has not undergone formal security review or penetration testing and should not be used to transmit sensitive or production data without addressing the items listed in Security Notes.
+---
 
-License
-No explicit license is currently defined for this project.
+## Limitations
 
-If you intend to make the repository open source, add an appropriate LICENSE file and specify the license here.
+- Supports exactly **two peers** per session (one server, one client) — no group chat or multi-client broadcast.
+- No message history, persistence, or logging.
+- No GUI — terminal/console only.
+- No file transfer support.
+- No reconnection logic if the connection drops mid-session.
+- Messages larger than a single `recv(4096)` buffer are not reassembled.
+
+---
+
+## Future Improvements
+
+Potential enhancements for extending this project beyond its current academic scope:
+
+- Proper certificate verification on the client (CA-signed certs or certificate pinning)
+- Peer authentication (pre-shared key, username/password, or public-key identity)
+- Message framing/protocol (length-prefixed or JSON-based) to support larger and structured payloads
+- Support for multiple simultaneous client connections on the server
+- Encrypted local message logging with configurable retention
+- File transfer support
+- Automatic reconnection with exponential backoff
+- A simple GUI (e.g. Tkinter or a web-based front end)
+- Unit tests for the send/receive and handshake logic
+- Cross-platform packaging (PyInstaller / standalone executable)
+
+---
+
+## Disclaimer
+
+SecureChat is an academic/software engineering project intended to demonstrate TLS socket programming concepts. It has not undergone a formal security audit and should not be relied upon for transmitting sensitive or confidential information in production environments without significant additional hardening — particularly around peer/certificate authentication.
+
+---
+
+## License
+
+No explicit license is currently defined for this project. If you intend to make the repository open source, add an appropriate `LICENSE` file and reference it here.
